@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.decomposition import PCA
@@ -299,6 +301,148 @@ class Plot:
         plt.ylabel('Silhouette Score')
         plt.legend()
         plt.show()
+
+    
+    def plot_lower_triangle_correlation(self, df, start_col, end_col, title):
+        """
+        Plots a lower triangle heatmap of the correlation matrix for the selected numeric columns.
+
+        Parameters:
+        df (DataFrame): The input dataframe.
+        start_col (int): The starting column index.
+        end_col (int): The ending column index.
+        title (str): The title of the heatmap.
+        """
+        # Select the numeric subset
+        subset = df.select_dtypes(include=['number']).iloc[:, start_col:end_col]
+
+        # Compute correlation matrix
+        corr_matrix = subset.corr()
+
+        # Create mask for upper triangle
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+
+        # Plot heatmap
+        plt.figure(figsize=(16, 10))
+        sns.heatmap(corr_matrix, mask=mask, annot=True, fmt=".2f", cmap="RdYlGn")
+        plt.title(title)
+        plt.show()
+
+    def analyze_correlation(self, df):
+        """
+        Analyzes the correlation of numeric columns in the dataframe and plots the lower triangle correlation matrices.
+
+        Parameters:
+        df (DataFrame): The input dataframe.
+        """
+        # Select only numeric columns
+        numeric_data = df.select_dtypes(include=['number'])
+        num_columns = len(numeric_data.columns)
+
+        if num_columns < 20:
+            print("The dataset has fewer than 20 numeric columns.")
+            return
+
+        # Plot first 20 numeric columns correlation matrix
+        self.plot_lower_triangle_correlation(df, start_col=3, end_col=27, 
+                                        title="Lower Triangle Correlation Matrix (First 20 Numeric Columns)")
+
+        if num_columns > 27:
+            # Plot second 20 numeric columns correlation matrix
+            self.plot_lower_triangle_correlation(df, start_col=27, end_col=55, 
+                                            title="Lower Triangle Correlation Matrix (Second 20 Numeric Columns)")
+        else:
+            print("The dataset has fewer than 40 numeric columns.")
+    def plot_missing_values_heatmap(self,df):
+        plt.figure(figsize=(10, 10))
+        sns.heatmap(df.isnull(), cbar=False, cmap="viridis")
+        plt.title("Missing Values Heatmap")
+        plt.show()
+    
+    def plot_histograms_with_lines(self, group, title):
+        """
+        Plots histograms with vertical lines for mean and median.
+        
+        Parameters:
+        group (DataFrame): A subset of numeric columns from the dataset.
+        title (str): Title for the histograms.
+        """
+        for column in group.columns:
+            plt.figure(figsize=(8, 5))
+            group[column].hist(bins=30, color='skyblue', edgecolor='black', alpha=0.7)
+
+            # Add vertical lines for mean and median
+            mean_val = group[column].mean()
+            median_val = group[column].median()
+
+            plt.axvline(mean_val, color='red', linestyle='--', linewidth=1.5, label=f'Mean: {mean_val:.2f}')
+            plt.axvline(median_val, color='green', linestyle='-.', linewidth=1.5, label=f'Median: {median_val:.2f}')
+
+            # Add title and legend
+            plt.title(f'Histogram of {column}\n{title}')
+            plt.xlabel(column)
+            plt.ylabel('Frequency')
+            plt.legend()
+            plt.show()
+
+    def analyze_numeric_columns(self, df):
+        """
+        Analyzes the numeric columns in the dataset by:
+        - Checking skewness
+        - Plotting histograms with mean and median lines
+        
+        Parameters:
+        df (DataFrame): The input dataset.
+        """
+        # Select numeric columns
+        numeric_data = df.select_dtypes(include=['number'])
+        num_columns = len(numeric_data.columns)
+
+        if num_columns < 10:
+            print("The dataset has fewer than 10 numeric columns.")
+            return
+        
+        # Define groups of numeric columns
+        column_groups = [
+            (3, 12, "First Group of Numeric Columns"),
+            (12, 24, "Second Group of Numeric Columns"),
+            (24, 40, "Third Group of Numeric Columns"),
+            (40, 55, "Fourth Group of Numeric Columns")
+        ]
+
+        for start, end, title in column_groups:
+            if num_columns > start:
+                group = numeric_data.iloc[:, start:end]
+                skewness = group.skew()
+                print(f"Skewness for {title}:")
+                print(skewness)
+                self.plot_histograms_with_lines(group, title)
+            else:
+                print(f"The dataset has fewer than {end} numeric columns.")
+                break  # Stop checking further groups if columns are insufficient
+
     
     
-    
+    def quantile_impute_based_on_skewness(self, df, col):
+        # Check if the column is numeric
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            print(f"Skipping column '{col}' because it is not numeric.")
+            return
+        
+        skewness = df[col].skew()  # Calculate skewness of the column
+        
+        # If the skewness is greater than 0 (right-skewed), use a higher quantile (e.g., 75th percentile)
+        if skewness > 0:
+            quantile_value = df[col].quantile(0.75)  # 75th percentile for right-skewed data
+            df[col].fillna(quantile_value, inplace=True)
+        
+        # If the skewness is less than 0 (left-skewed), use a lower quantile (e.g., 25th percentile)
+        elif skewness < 0:
+            quantile_value = df[col].quantile(0.25)  # 25th percentile for left-skewed data
+            df[col].fillna(quantile_value, inplace=True)
+        
+        # If the skewness is approximately 0 (symmetrical), you can choose a quantile around the median (50th percentile)
+        else:
+            print(f"Approximately symmetric: {col}, applying Quantile Imputation (50th percentile).")
+            quantile_value = df[col].quantile(0.50)  # 50th percentile for symmetric data (similar to median)
+            df[col].fillna(quantile_value, inplace=True)
